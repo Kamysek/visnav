@@ -374,8 +374,20 @@ void optimize() {
                             Sophus::SE3d::num_parameters,
                             new Sophus::test::LocalParameterizationSE3);
 
+  // Add Parameter Block to problem
+  problem.AddParameterBlock(calib_cam.T_i_c[1].data(),
+                            Sophus::SE3d::num_parameters,
+                            new Sophus::test::LocalParameterizationSE3);
+
   // Disable optimization of transformation from first camera to body frame
   problem.SetParameterBlockConstant(calib_cam.T_i_c[0].data());
+
+  // Add Parameter Block to problem
+  for (const auto& kv : calib_corners) {
+    problem.AddParameterBlock(vec_T_w_i[kv.first.frame_id].data(),
+                              Sophus::SE3d::num_parameters,
+                              new Sophus::test::LocalParameterizationSE3);
+  }
 
   // Cycle through the detected corners for each frame
   for (const auto& kv : calib_corners) {
