@@ -84,14 +84,13 @@ class PinholeCamera : public AbstractCamera<Scalar> {
 
     Vec2 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(z);
+    // If z <= 0 projection is not defined
+    if (z <= Scalar(0)) {
+      return res.setZero();
+    }
+
+    res[0] = fx * (x / z) + cx;
+    res[1] = fy * (y / z) + cy;
 
     return res;
   }
@@ -104,12 +103,31 @@ class PinholeCamera : public AbstractCamera<Scalar> {
 
     Vec3 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(p);
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
+    Scalar mx = Scalar(0);
+    Scalar my = Scalar(0);
+
+    // Division by zero not allowed
+    if (fx != Scalar(0)) {
+      mx = (p[0] - cx) / fx;
+    }
+
+    if (fy != Scalar(0)) {
+      my = (p[1] - cy) / fy;
+    }
+
+    // Calcualate lower part of fraction and check if zero since division by
+    // zero not allowed
+    Scalar lower_part_of_frac = sqrt(mx * mx + my * my + Scalar(1));
+    res.setConstant(lower_part_of_frac);
+
+    if (lower_part_of_frac == Scalar(0)) {
+      return res;
+    }
+
+    // Calculate multiplication of fraction with [mx, my, 1]
+    res[0] = mx / res[0];
+    res[1] = my / res[1];
+    res[2] = Scalar(1) / res[2];
 
     return res;
   }
@@ -167,16 +185,20 @@ class ExtendedUnifiedCamera : public AbstractCamera<Scalar> {
 
     Vec2 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
-    UNUSED(alpha);
-    UNUSED(beta);
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(z);
+    // Calculate d
+    Scalar d = sqrt(beta * (x * x + y * y) + z * z);
+
+    // Calculate lower part of fraction and check if zero
+    // since division by zero not allowed
+    Scalar lower_part_of_frac = alpha * d + (Scalar(1) - alpha) * z;
+    res.setConstant(lower_part_of_frac);
+
+    if (lower_part_of_frac == Scalar(0)) {
+      return res;
+    }
+
+    res[0] = (fx * x) / res[0] + cx;
+    res[1] = (fy * y) / res[1] + cy;
 
     return res;
   }
@@ -191,14 +213,42 @@ class ExtendedUnifiedCamera : public AbstractCamera<Scalar> {
 
     Vec3 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(p);
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
-    UNUSED(alpha);
-    UNUSED(beta);
+    Scalar mx = Scalar(0);
+    Scalar my = Scalar(0);
+    Scalar mz = Scalar(0);
+
+    // Division by zero not allowed
+    if (fx != Scalar(0)) {
+      mx = (p[0] - cx) / fx;
+    }
+    if (fy != Scalar(0)) {
+      my = (p[1] - cy) / fy;
+    }
+
+    // Calculate lower part of fraction and check if zero
+    // since division by zero not allowed
+    Scalar lower_part_of_frac_mz =
+        alpha * sqrt(Scalar(1) - (Scalar(2) * alpha - Scalar(1)) * beta *
+                                     (mx * mx + my * my)) +
+        (Scalar(1) - alpha);
+
+    if (lower_part_of_frac_mz != Scalar(0)) {
+      mz = (Scalar(1) - (beta * alpha * alpha * (mx * mx + my * my))) /
+           lower_part_of_frac_mz;
+    }
+
+    // Calculate lower part of fraction and check if zero
+    // since division by zero not allowed
+    Scalar lower_part_of_frac = sqrt(mx * mx + my * my + mz * mz);
+    res.setConstant(lower_part_of_frac);
+
+    if (lower_part_of_frac == Scalar(0)) {
+      return res;
+    }
+
+    res[0] = mx / res[0];
+    res[1] = my / res[1];
+    res[2] = mz / res[2];
 
     return res;
   }
@@ -252,16 +302,22 @@ class DoubleSphereCamera : public AbstractCamera<Scalar> {
 
     Vec2 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
-    UNUSED(xi);
-    UNUSED(alpha);
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(z);
+    // Calculate d1 and d2
+    Scalar d1 = sqrt(x * x + y * y + z * z);
+    Scalar d2 = sqrt(x * x + y * y + ((xi * d1 + z) * (xi * d1 + z)));
+
+    // Calculate lower part of fraction and check if zero
+    // since division by zero not allowed
+    Scalar lower_part_of_frac =
+        alpha * d2 + (Scalar(1) - alpha) * (xi * d1 + z);
+    res.setConstant(lower_part_of_frac);
+
+    if (lower_part_of_frac == Scalar(0)) {
+      return res;
+    }
+
+    res[0] = (fx * x) / res[0] + cx;
+    res[1] = (fy * y) / res[1] + cy;
 
     return res;
   }
@@ -276,14 +332,46 @@ class DoubleSphereCamera : public AbstractCamera<Scalar> {
 
     Vec3 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(p);
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
-    UNUSED(xi);
-    UNUSED(alpha);
+    Scalar mx = Scalar(0);
+    Scalar my = Scalar(0);
+    Scalar mz = Scalar(0);
+
+    // Division by zero not allowed
+    if (fx != Scalar(0)) {
+      mx = (p[0] - cx) / fx;
+    }
+    if (fy != Scalar(0)) {
+      my = (p[1] - cy) / fy;
+    }
+
+    // Calculate lower part of fraction and check if zero
+    // since division by zero not allowed
+    Scalar lower_part_of_frac_mz =
+        alpha * sqrt(Scalar(1) -
+                     (Scalar(2) * alpha - Scalar(1)) * (mx * mx + my * my)) +
+        (Scalar(1) - alpha);
+
+    if (lower_part_of_frac_mz != Scalar(0)) {
+      mz = (Scalar(1) - (alpha * alpha * (mx * mx + my * my))) /
+           lower_part_of_frac_mz;
+    }
+
+    // Calculate lower part of fraction and check if zero
+    // since division by zero not allowed
+    Scalar lower_part_of_frac = mz * mz + mx * mx + my * my;
+    res.setConstant(lower_part_of_frac);
+
+    Scalar higher_part_of_frac =
+        mz * xi + sqrt(mz * mz + (Scalar(1) - xi * xi) * (mx * mx + my * my));
+
+    if (lower_part_of_frac == Scalar(0)) {
+      return res;
+    }
+
+    res[0] = mx * higher_part_of_frac / res[0];
+    res[1] = my * higher_part_of_frac / res[1];
+    res[2] = mz * higher_part_of_frac / res[2] - xi;
+
     return res;
   }
 
@@ -340,18 +428,25 @@ class KannalaBrandt4Camera : public AbstractCamera<Scalar> {
 
     Vec2 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
-    UNUSED(k1);
-    UNUSED(k2);
-    UNUSED(k3);
-    UNUSED(k4);
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(z);
+    Scalar r = sqrt(x * x + y * y);
+    res.setConstant(r);
+
+    // Calculate thetas
+    Scalar theta = atan2(r, z);
+    // Horner theta
+    Scalar d_theta =
+        theta *
+        (theta * theta *
+             (k1 + theta * theta *
+                       (k2 + theta * theta * (k3 + k4 * theta * theta))) +
+         Scalar(1));
+
+    if (r == Scalar(0)) {
+      return res;
+    }
+
+    res[0] = (fx * d_theta * x) / res[0] + cx;
+    res[1] = (fy * d_theta * y) / res[1] + cy;
 
     return res;
   }
@@ -361,15 +456,61 @@ class KannalaBrandt4Camera : public AbstractCamera<Scalar> {
     const Scalar& fy = param[1];
     const Scalar& cx = param[2];
     const Scalar& cy = param[3];
+    const Scalar& k1 = param[4];
+    const Scalar& k2 = param[5];
+    const Scalar& k3 = param[6];
+    const Scalar& k4 = param[7];
 
     Vec3 res;
 
-    // TODO SHEET 2: implement camera model
-    UNUSED(p);
-    UNUSED(fx);
-    UNUSED(fy);
-    UNUSED(cx);
-    UNUSED(cy);
+    Scalar mx = Scalar(0);
+    Scalar my = Scalar(0);
+
+    if (fx != Scalar(0) && p[0] != Scalar(0)) {
+      mx = (p[0] - cx) / fx;
+    }
+
+    if (fy != Scalar(0) && p[1] != Scalar(0)) {
+      my = (p[1] - cy) / fy;
+    }
+
+    Scalar r = sqrt(mx * mx + my * my);
+    res.setConstant(r);
+
+    // Initialize variables for newton method x1 = x0 - f(x0) / f(x0)'
+    Scalar theta = Scalar(1);
+
+    Scalar d_theta = Scalar(0);
+    Scalar d_driv_theta = Scalar(0);
+
+    for (int i = 0; i < 100; i++) {
+      // Horner theta
+      d_theta =
+          theta *
+              (theta * theta *
+                   (k1 + theta * theta *
+                             (k2 + theta * theta * (k3 + k4 * theta * theta))) +
+               Scalar(1)) -
+          r;
+
+      // Calcualte x0 derivative
+      d_driv_theta = Scalar(1) + Scalar(3) * k1 * theta * theta +
+                     theta * theta * theta * theta *
+                         (Scalar(5) * k2 * +theta * theta *
+                          (Scalar(7) * k3 + Scalar(9) * k4 * theta * theta));
+
+      // Calcualte update (x1) and set it as new theta
+      theta = theta - (d_theta / d_driv_theta);
+    }
+
+    if (r == Scalar(0)) {
+      res[2] = cos(theta);
+      return res;
+    }
+
+    res[0] = mx * sin(theta) / res[0];
+    res[1] = my * sin(theta) / res[1];
+    res[2] = cos(theta);
 
     return res;
   }

@@ -349,11 +349,14 @@ void compute_projections() {
       // 3D coordinates of the aprilgrid corner in the world frame
       Eigen::Vector3d p_3d = aprilgrid.aprilgrid_corner_pos_3d[i];
 
-      // TODO SHEET 2: project point
-      UNUSED(T_w_i);
-      UNUSED(T_i_c);
-      UNUSED(p_3d);
       Eigen::Vector2d p_2d;
+
+      // Get intrinsics of specified camera
+      const std::shared_ptr<AbstractCamera<double>> camera =
+          calib_cam.intrinsics[kv.first.cam_id];
+
+      // Compute projected 2d point
+      p_2d = camera->project(T_i_c.inverse() * T_w_i.inverse() * p_3d);
 
       ccd.corners.push_back(p_2d);
     }
@@ -366,7 +369,55 @@ void optimize() {
   // Build the problem.
   ceres::Problem problem;
 
-  // TODO SHEET 2: setup optimization problem
+  // Add Parameter Block to problem
+  problem.AddParameterBlock(calib_cam.T_i_c[0].data(),
+                            Sophus::SE3d::num_parameters,
+                            new Sophus::test::LocalParameterizationSE3);
+
+  // Add Parameter Block to problem
+  problem.AddParameterBlock(calib_cam.T_i_c[1].data(),
+                            Sophus::SE3d::num_parameters,
+                            new Sophus::test::LocalParameterizationSE3);
+
+  // Disable optimization of transformation from first camera to body frame
+  problem.SetParameterBlockConstant(calib_cam.T_i_c[0].data());
+
+  // Add Parameter Block to problem
+  for (const auto& kv : calib_corners) {
+    problem.AddParameterBlock(vec_T_w_i[kv.first.frame_id].data(),
+                              Sophus::SE3d::num_parameters,
+                              new Sophus::test::LocalParameterizationSE3);
+  }
+
+  // Cycle through the detected corners for each frame
+  for (const auto& kv : calib_corners) {
+    // Extract the pos_2d, pos_3d and cam model
+    for (int ci = 0; ci < kv.second.corners.size(); ci++) {
+      // pos_2d is the corner itself
+      Eigen::Vector2d pos_2d = kv.second.corners[ci];
+
+      // pos_3d is extracted using the corner id
+      Eigen::Vector3d pos_3d =
+          aprilgrid.aprilgrid_corner_pos_3d[kv.second.corner_ids[ci]];
+
+      // Construct a AutoDiffCostFunction with the ReprojectionCostFunctor
+      ceres::CostFunction* cost_function =
+          new ceres::AutoDiffCostFunction<ReprojectionCostFunctor, 2,
+                                          Sophus::SE3d::num_parameters,
+                                          Sophus::SE3d::num_parameters, 8>(
+              new ReprojectionCostFunctor(pos_2d, pos_3d, cam_model));
+
+      // Add Residual blocks with
+      // vec_T_w_i[kv.first.frame_id].data() -> Transformation from body (IMU)
+      // frame to world frame, calib_cam.T_i_c[kv.first.cam_id].data(); ->
+      // Transformation from camera to body (IMU) frame and intrinsics of
+      // specified camera
+      problem.AddResidualBlock(cost_function, NULL,
+                               vec_T_w_i[kv.first.frame_id].data(),
+                               calib_cam.T_i_c[kv.first.cam_id].data(),
+                               calib_cam.intrinsics[kv.first.cam_id]->data());
+    }
+  }
 
   ceres::Solver::Options options;
   options.gradient_tolerance = 0.01 * Sophus::Constants<double>::epsilon();
