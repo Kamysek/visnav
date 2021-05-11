@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <bitset>
 #include <set>
+#include <tuple>
 
 #include <Eigen/Dense>
 #include <sophus/se3.hpp>
@@ -161,10 +162,32 @@ void computeAngles(const pangolin::ManagedImage<uint8_t>& img_raw,
     double angle = 0;
 
     if (rotate_features) {
-      // TODO SHEET 3: compute angle
-      UNUSED(img_raw);
-      UNUSED(cx);
-      UNUSED(cy);
+      // Create vector of x,y points within a specified radius
+      int r = 15;
+      std::vector<std::pair<int, int>> circle_points;
+      for (int x = -r; x <= r; x++) {
+        for (int y = -r; y <= r; y++) {
+          // Only take points which are inside of the circle
+          if (x * x + y * y <= r * r) {
+            circle_points.push_back(std::make_pair(x, y));
+          }
+        }
+      }
+
+      // Compute m_01 and m_10
+      double m_01 = 0;
+      double m_10 = 0;
+      double intermediate_result = 0;
+      for (auto it = std::begin(circle_points); it != std::end(circle_points);
+           ++it) {
+        intermediate_result =
+            (int)(img_raw(cx + std::get<0>(*it), cy + std::get<1>(*it)));
+        m_10 += (std::get<0>(*it) * intermediate_result);
+        m_01 += (std::get<1>(*it) * intermediate_result);
+      }
+
+      // Calculate angle
+      angle = std::atan2(m_01, m_10);
     }
 
     kd.corner_angles[i] = angle;
@@ -184,11 +207,35 @@ void computeDescriptors(const pangolin::ManagedImage<uint8_t>& img_raw,
     const int cx = p[0];
     const int cy = p[1];
 
-    // TODO SHEET 3: compute descriptor
-    UNUSED(img_raw);
-    UNUSED(angle);
-    UNUSED(cx);
-    UNUSED(cy);
+    // Calculate sin and cos of theta for rotation
+    Eigen::Matrix<double, 2, 2> rot_with_theta;
+    rot_with_theta << cos(angle), -sin(angle), sin(angle), cos(angle);
+
+    // Create 256 bit descriptor
+    for (int i = 0; i < 256; i++) {
+      // Initalize p_a = [x_a, y_a]^T and p_b = [x_b, y_b]^T
+      Eigen::Vector2d p_a =
+          Eigen::Vector2d(pattern_31_x_a[i], pattern_31_y_a[i]);
+      Eigen::Vector2d p_b =
+          Eigen::Vector2d(pattern_31_x_b[i], pattern_31_y_b[i]);
+
+      // Calcualte p_a_high and p_b_high
+      // p_a_high = [x_a_high, y_a_high]^T and p_b_high = [x_b_high, y_b_high]^T
+      // p_a and p_b are initialized with x_a and y_a, x_b, y_b
+      Eigen::Vector2d p_a_high = rot_with_theta * p_a;
+      Eigen::Vector2d p_b_high = rot_with_theta * p_b;
+
+      // Add cx and cy to p_a_high and p_b_high
+      p_a_high += p;
+      p_b_high += p;
+
+      // Perform comparison of image intensities and set descriptor result
+      descriptor[i] = 0;
+      if (img_raw(round(p_a_high(0)), round(p_a_high(1))) <
+          img_raw(round(p_b_high(0)), round(p_b_high(1)))) {
+        descriptor[i] = 1;
+      }
+    }
 
     kd.corner_descriptors[i] = descriptor;
   }
@@ -202,18 +249,100 @@ void detectKeypointsAndDescriptors(
   computeDescriptors(img_raw, kd);
 }
 
+inline std::tuple<int, int, int> calculate_hamming_and_evaluate(
+    const std::bitset<256>& corner_descriptor_1,
+    const std::bitset<256>& corner_descriptor_2, int first, int second,
+    int index) {
+  // Compute hamming distance
+  int hamming_distance = (corner_descriptor_1 ^ corner_descriptor_2).count();
+
+  // Update first and second best match
+  if (hamming_distance < first) {
+    second = first;
+    first = hamming_distance;
+    return std::make_tuple(first, second, index);
+  }
+
+  if (hamming_distance < second) {
+    second = hamming_distance;
+    return std::make_tuple(-1, second, -1);
+  }
+
+  return std::make_tuple(-1, -1, -1);
+}
+
 void matchDescriptors(const std::vector<std::bitset<256>>& corner_descriptors_1,
                       const std::vector<std::bitset<256>>& corner_descriptors_2,
                       std::vector<std::pair<int, int>>& matches, int threshold,
                       double dist_2_best) {
   matches.clear();
 
-  // TODO SHEET 3: match features
-  UNUSED(corner_descriptors_1);
-  UNUSED(corner_descriptors_2);
-  UNUSED(matches);
-  UNUSED(threshold);
-  UNUSED(dist_2_best);
+  // Cycle through descriptors
+  for (int i = 0; i < corner_descriptors_1.size(); i++) {
+    std::tuple<int, int, int> result;
+
+    // Store first and second best match
+    int first_1 = std::numeric_limits<int>::max();
+    int second_1 = std::numeric_limits<int>::max();
+    int corner_descriptors_index_1;
+
+    for (int j = 0; j < corner_descriptors_2.size(); j++) {
+      result = calculate_hamming_and_evaluate(corner_descriptors_1[i],
+                                              corner_descriptors_2[j], first_1,
+                                              second_1, j);
+
+      // Update values
+      if (std::get<1>(result) != -1) {
+        second_1 = std::get<1>(result);
+        if (std::get<2>(result) != -1) {
+          first_1 = std::get<0>(result);
+          second_1 = std::get<1>(result);
+          corner_descriptors_index_1 = std::get<2>(result);
+        }
+      }
+    }
+
+    // Check if threshold is reached or distance to second best match is smaller
+    // than smallest distance multiplied by dist_2_best
+    if ((first_1 >= threshold) || (second_1 < (first_1 * dist_2_best))) {
+      continue;
+    }
+
+    // Check if found match in corner_descriptors_2
+    // also work the other way around
+    // Store first and second best match
+    int first_2 = std::numeric_limits<int>::max();
+    int second_2 = std::numeric_limits<int>::max();
+    int corner_descriptors_index_2;
+
+    for (int j = 0; j < corner_descriptors_1.size(); j++) {
+      result = calculate_hamming_and_evaluate(
+          corner_descriptors_1[j],
+          corner_descriptors_2[corner_descriptors_index_1], first_2, second_2,
+          j);
+
+      // Update values
+      if (std::get<1>(result) != -1) {
+        second_2 = std::get<1>(result);
+        if (std::get<2>(result) != -1) {
+          first_2 = std::get<0>(result);
+          second_2 = std::get<1>(result);
+          corner_descriptors_index_2 = std::get<2>(result);
+        }
+      }
+    }
+
+    // Check if threshold is reached or distance to second best match is smaller
+    // than smallest distance multiplied by dist_2_best
+    if ((first_2 >= threshold) || (second_2 < (first_2 * dist_2_best))) {
+      continue;
+    }
+
+    // Check if values match
+    if (i == corner_descriptors_index_2) {
+      matches.push_back(std::make_pair(i, corner_descriptors_index_1));
+    }
+  }
 }
 
 }  // namespace visnav
