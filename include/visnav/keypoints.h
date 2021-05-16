@@ -278,7 +278,7 @@ void matchDescriptors(const std::vector<std::bitset<256>>& corner_descriptors_1,
   matches.clear();
 
   // Cycle through descriptors
-  for (int i = 0; i < corner_descriptors_1.size(); i++) {
+  for (size_t i = 0; i < corner_descriptors_1.size(); i++) {
     std::tuple<int, int, int> result;
 
     // Store first and second best match
@@ -286,7 +286,7 @@ void matchDescriptors(const std::vector<std::bitset<256>>& corner_descriptors_1,
     int second_1 = std::numeric_limits<int>::max();
     int corner_descriptors_index_1;
 
-    for (int j = 0; j < corner_descriptors_2.size(); j++) {
+    for (size_t j = 0; j < corner_descriptors_2.size(); j++) {
       result = calculate_hamming_and_evaluate(corner_descriptors_1[i],
                                               corner_descriptors_2[j], first_1,
                                               second_1, j);
@@ -315,7 +315,7 @@ void matchDescriptors(const std::vector<std::bitset<256>>& corner_descriptors_1,
     int second_2 = std::numeric_limits<int>::max();
     int corner_descriptors_index_2;
 
-    for (int j = 0; j < corner_descriptors_1.size(); j++) {
+    for (size_t j = 0; j < corner_descriptors_1.size(); j++) {
       result = calculate_hamming_and_evaluate(
           corner_descriptors_1[j],
           corner_descriptors_2[corner_descriptors_index_1], first_2, second_2,
