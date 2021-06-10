@@ -117,6 +117,9 @@ target_link_libraries(calibration Ceres::ceres pangolin TBB)
 add_executable(sfm src/sfm.cpp)
 target_link_libraries(sfm Ceres::ceres pangolin TBB OpenCV opengv)
 
+add_executable(evaluation src/evaluation.cpp)
+target_link_libraries(evaluation Ceres::ceres pangolin TBB OpenCV opengv)
+
 add_executable(odometry src/odometry.cpp)
 target_link_libraries(odometry Ceres::ceres pangolin TBB OpenCV opengv)
 
