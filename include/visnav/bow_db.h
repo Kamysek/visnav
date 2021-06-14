@@ -47,22 +47,78 @@ class BowDatabase {
   BowDatabase() {}
 
   inline void insert(const FrameCamId& fcid, const BowVector& bow_vector) {
-    // TODO SHEET 3: add a bow_vector that corresponds to frame fcid to the
-    // inverted index. You can assume the image hasn't been added before.
-    UNUSED(fcid);
-    UNUSED(bow_vector);
+    // Cycle through the bow vector and add the fcid
+    // and wordValue for each wordId wordId
+    for (const auto& bow_pair : bow_vector) {
+      inverted_index[bow_pair.first].push_back(
+          std::make_pair(fcid, bow_pair.second));
+    }
+  }
+
+  static bool sort_function(std::pair<FrameCamId, WordValue> i,
+                            std::pair<FrameCamId, WordValue> j) {
+    if (i.second < j.second) {
+      return true;
+    }
+    return false;
   }
 
   inline void query(const BowVector& bow_vector, size_t num_results,
                     BowQueryResult& results) const {
-    // TODO SHEET 3: find num_results closest matches to the bow_vector in the
-    // inverted index. Hint: for good query performance use std::unordered_map
-    // to accumulate scores and std::partial_sort for getting the closest
-    // results. You should use L1 difference as the distance measure. You can
-    // assume that BoW descripors are L1 normalized.
-    UNUSED(bow_vector);
-    UNUSED(num_results);
-    UNUSED(results);
+    // Contains WordId and WordValue for each FrameCamId
+    std::unordered_map<FrameCamId, std::vector<std::pair<WordId, WordValue>>>
+        frame_value_pairs;
+
+    // Cylce through bow vector and store pairs
+    // of wordId and wordValue for a frameId
+    for (const auto& bow_pair : bow_vector) {
+      // Check if wordId is in inverted_index
+      if (inverted_index.find(bow_pair.first) != inverted_index.end())
+        // Cycle through all frameId and wordValue pairs
+        for (const auto& frame_value_pair : inverted_index.at(bow_pair.first)) {
+          // Add wordId and wordValue for frameId to accumulated_scores
+          frame_value_pairs[frame_value_pair.first].push_back(
+              std::make_pair(bow_pair.first, frame_value_pair.second));
+        }
+    }
+
+    std::vector<std::pair<FrameCamId, WordValue>> bow_distances;
+    // Calculate efficient bow scoring
+    for (const auto& frame_value_pair : frame_value_pairs) {
+      // Store wordId and wordValue in map
+      std::map<WordId, WordValue> words_with_value;
+      for (size_t i = 0; i < frame_value_pair.second.size(); ++i) {
+        // Store values of words in map and add together if index is the same
+        words_with_value[frame_value_pair.second[i].first] +=
+            frame_value_pair.second[i].second;
+      }
+
+      // Calculate distance
+      double distance = 2;
+      for (const auto& bow_pair : bow_vector) {
+        // Check if wordId is in map, if so calculate distance metric
+        if (words_with_value.find(bow_pair.first) != words_with_value.end())
+          distance += abs(bow_pair.second - words_with_value[bow_pair.first]) -
+                      abs(bow_pair.second) -
+                      abs(words_with_value[bow_pair.first]);
+      }
+
+      // Store frameId and distance
+      bow_distances.push_back(std::make_pair(frame_value_pair.first, distance));
+    }
+
+    // Make sure the num_results size is not bigger than possible results
+    num_results = std::min(bow_distances.size(), num_results);
+
+    // Perform partial sort of the lenght num_results with custom sort_function
+    std::partial_sort(bow_distances.begin(),
+                      bow_distances.begin() + num_results, bow_distances.end(),
+                      sort_function);
+
+    // Extract certain length of the bow distances vector
+    std::vector<std::pair<FrameCamId, WordValue>> res(
+        bow_distances.begin(), bow_distances.begin() + num_results);
+    results = res;
   }
 
   void clear() { inverted_index.clear(); }

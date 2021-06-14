@@ -56,18 +56,35 @@ class BowVocabulary {
 
   inline void transformFeatureToWord(const TDescriptor& feature,
                                      WordId& word_id, WordValue& weight) const {
-    // TODO SHEET 3: propagate feature through the vocabulary tree stored in the
-    // array m_nodes. The root node has id=0 (m_nodes[0]). The array
-    // m_nodes[id].children stores ids (index in the array) of the children
-    // nodes, m_nodes[id].isLeaf() is true for the leaf nodes.
-    // m_nodes[id].descriptor stores the centroid of the node. Start from the
-    // root node and propagate to the node that has a smallest distance between
-    // feature and descriptor of the cluster centroid. Iterate until you reach
-    // the leaf node. Save m_nodes[id].word_id and m_nodes[id].weight of the
-    // leaf node to the corresponding variables.
-    UNUSED(feature);
-    UNUSED(word_id);
-    UNUSED(weight);
+    std::pair<WordValue, WordId> result = recPropagateFeature(feature, 0);
+
+    weight = std::get<0>(result);
+    word_id = std::get<1>(result);
+  }
+
+  inline std::pair<WordValue, WordId> recPropagateFeature(
+      const TDescriptor& feature, size_t current_node) const {
+    // Check if current node is a leaf,
+    // if so return pair with weight and word_id
+    if (m_nodes[current_node].isLeaf()) {
+      return std::make_pair(m_nodes[current_node].weight,
+                            m_nodes[current_node].word_id);
+    }
+
+    // Search shortest distance between children descriptor and feature
+    NodeId id = 0;
+    size_t distanceFD = std::numeric_limits<size_t>::max();
+    for (const auto child_index : m_nodes[current_node].children) {
+      size_t distance = (feature ^ m_nodes[child_index].descriptor).count();
+      // Check if current distance is shorter than stored distance
+      // otherwise update values
+      if (distance < distanceFD) {
+        distanceFD = distance;
+        id = child_index;
+      }
+    }
+
+    return recPropagateFeature(feature, id);
   }
 
   inline void transform(const std::vector<TDescriptor>& features,
@@ -78,12 +95,38 @@ class BowVocabulary {
       return;
     }
 
-    // TODO SHEET 3: transform the entire vector of features from an image to
-    // the BoW representation (you can use transformFeatureToWord function). Use
-    // L1 norm to normalize the resulting BoW vector.
-    UNUSED(features);
-  }
+    // Transform features to a word
+    std::vector<WordId> wordIds(features.size(), 0);
+    std::vector<WordValue> wordValues(features.size(), 0);
+    for (size_t i = 0; i < features.size(); ++i) {
+      transformFeatureToWord(features[i], wordIds[i], wordValues[i]);
+    }
 
+    // Add same ids together
+    std::map<WordId, WordValue> words_with_value;
+    for (size_t i = 0; i < wordIds.size(); ++i) {
+      // Ignore too small values
+      if (wordValues[i] < 1e-10) {
+        continue;
+      }
+
+      // Store values of words in map and add together if index is the same
+      words_with_value[wordIds[i]] += wordValues[i];
+    }
+
+    // Calculate norm value to norm the wordvalues with
+    WordValue norm = 0;
+    for (const auto& word : words_with_value) {
+      norm += word.second;
+    }
+
+    // Normalize WordValues and push to BowVector
+    for (const auto& word : words_with_value) {
+      std::pair<WordId, WordValue> word_value_pair =
+          std::make_pair(word.first, word.second / norm);
+      v.push_back(word_value_pair);
+    }
+  }
   void save(const std::string& filename) const {
     std::ofstream os(filename, std::ios::binary);
 
