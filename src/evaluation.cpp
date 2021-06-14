@@ -364,7 +364,7 @@ int main(int argc, char** argv) {
   } else if (detector.compare("sift")) {
     keypointDescriptorImplementation.reset(new SIFT_OpenCV(matcherType));
   } else if (detector.compare("surf")) {
-    //    keypointDescriptorImplementation.reset(new SURF_OpenCV(matcherType));
+    keypointDescriptorImplementation.reset(new SURF_OpenCV(matcherType));
   } else if (detector.compare("orb_ncv")) {
     keypointDescriptorImplementation.reset(new ORB_NonOpenCV);
   } else if (detector.compare("orb")) {
