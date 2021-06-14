@@ -1,3 +1,5 @@
+This is my implementation for the course: Vision Based Navigation (https://vision.in.tum.de/teaching/ss2021/visnav_ss2021)
+
 ## Vision-based Navigation
 
 This code is a part of the practical course "Vision-based Navigation" (IN2106) taught at the Technical University of Munich.
